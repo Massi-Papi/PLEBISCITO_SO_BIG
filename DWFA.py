@@ -157,12 +157,10 @@ class DWFA:
 
 
 if __name__ == "__main__":
-    #jobs = [Job(1, 0, 1), Job(2, 0, 5), Job(3, 0, 3), Job(4, 0, 2), Job(5, 0, 4)]
     jobs = []
     for i in range(10000):
         arrival_time = random.randint(0, 100)
         service_time = random.randint(1, 10)
         jobs.append(Job(i, arrival_time, service_time))
     dwfa = DWFA(400, jobs, 10)
-    # dwfa = DWFA(3, jobs, 2)
     asyncio.run(dwfa.run())
