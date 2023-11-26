@@ -38,6 +38,7 @@ class Server:
 
 # This class implements the DWF algorithm
 class DWFA:
+
     def __init__(self, num_servers, jobs, capacity):
         if num_servers < 1:
             raise ValueError("Number of servers must be greater than 0")
@@ -77,24 +78,29 @@ class DWFA:
             else:
                 self.virtual_time = max(self.virtual_time, next_job.arrival_time)
 
+            assign_start_time = time.perf_counter()
             # Assign job to server
             min_server.start_job(next_job)
+            assign_end_time = time.perf_counter()
+            assign_duration = assign_end_time - assign_start_time
 
             # Save current time
-            assign_time = time.time()
+            assign_time = time.perf_counter()
 
             #Print assignment
-            print(f"Job {next_job.id} assigned to server {min_server.id} at {assign_time}")
+            print(f"Job {next_job.id} assigned to server {min_server.id} in {assign_duration:.14f} seconds")
 
             # Calculate finish time for and assign it to the server
-            finish_time = max(self.virtual_time, next_job.arrival_time) + next_job.service_time
+            finish_time = assign_time + next_job.service_time
             min_server.expected_finish_time = finish_time
 
             # Update virtual time to the server's expected finish time
             self.virtual_time = min_server.expected_finish_time
 
+            finished_job_time = time.perf_counter()
+            job_duration = finished_job_time - assign_time
             #Print job completion
-            print(f"Job {next_job.id} completed at {finish_time}")
+            print(f"Job {next_job.id} completed at {job_duration:.10f}")
 
 
             # Continue sorting the remaining jobs
@@ -105,6 +111,7 @@ class DWFA:
     
 
     async def run(self):
+
         for job in self.jobs:
             self.add_job(job)
 
@@ -113,17 +120,9 @@ class DWFA:
 
     async def run_job(self,server, job):
         finished_jobs = []
-        # start_time = time.time()
-        # print(f"Job {job.id} started at {start_time}")  
-        # finished_jobs.append((job, time.time()))
 
         await asyncio.sleep(job.service_time)
         finished_jobs.sort(key=lambda x: x[1])
-
-        for job, start_time in finished_jobs:
-            # print(f"Job {job.id} finished at {start_time}")
-            # print("Server {} busy: {}".format(server.id, server.busy))
-            server.finish_job()
     
     async def start_job(self, job):
         # Finds the server with the minimum number of jobs and that is not at full capacity
@@ -137,23 +136,12 @@ class DWFA:
             self.virtual_time = min_server.expected_finish_time
         else:
             self.virtual_time = max(self.virtual_time, job.arrival_time)
-
+        
         min_server.start_job(job)
-
-        # Calculate finish time for and assign it to the server
-        finish_time = max(self.virtual_time, job.arrival_time) + job.service_time
-        min_server.expected_finish_time = finish_time
-
-        # Print Job assignment
-        print("Job {} assigned to server {}".format(job.id, min_server.id))
-
-        # Print server busy state
-        print("Server {} busy: {}".format(job.id, min_server.busy))
 
         # Update virtual time
         self.virtual_time = min_server.expected_finish_time
 
-        asyncio.create_task(self.run_job(min_server, job))
 
 
 if __name__ == "__main__":
@@ -162,5 +150,9 @@ if __name__ == "__main__":
         arrival_time = random.randint(0, 100)
         service_time = random.randint(1, 10)
         jobs.append(Job(i, arrival_time, service_time))
+
     dwfa = DWFA(400, jobs, 10)
     asyncio.run(dwfa.run())
+    print("\n")
+    print("DWFA DONE")
+
