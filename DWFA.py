@@ -14,7 +14,6 @@ class Job:
             return self.service_time < other.service_time
         return self.service_time < other.service_time
 
-
 class Server:
     def __init__(self, id, capacity):
         self.id = id
@@ -35,6 +34,7 @@ class Server:
         self.busy = False
         self.virtual_time = self.job.service_time
         self.expected_finish_time = 0
+        
 
 # This class implements the DWF algorithm
 class DWFA:
@@ -51,6 +51,11 @@ class DWFA:
         self.virtual_time = 0
         self.loop = asyncio.get_event_loop()
 
+        self.f = open("dwfa.txt", "w")
+
+        # Start time
+        self.start_time = time.time()
+
 
     def add_job(self, job):
         # Calculate finish time for job
@@ -58,6 +63,7 @@ class DWFA:
         heapq.heappush(self.job_queue, (finish_time, job.service_time, job))
 
     async def distribute_jobs(self):
+        
         while self.job_queue:
             job_time, service_time, next_job = heapq.heappop(self.job_queue)
 
@@ -81,10 +87,11 @@ class DWFA:
             min_server.start_job(next_job)
 
             # Save current time
-            assign_time = time.time()
+            assign_time = time.time() - self.start_time 
 
-            #Print assignment
-            print(f"Job {next_job.id} assigned to server {min_server.id} at {assign_time}")
+
+
+            print(f"Job {next_job.id} assigned to server {min_server.id} at {assign_time} seconds since the program started")
 
             # Calculate finish time for and assign it to the server
             finish_time = max(self.virtual_time, next_job.arrival_time) + next_job.service_time
@@ -94,13 +101,18 @@ class DWFA:
             self.virtual_time = min_server.expected_finish_time
 
             #Print job completion
-            print(f"Job {next_job.id} completed at {finish_time}")
+            self.f.write(f"\n Job: {next_job.id} \n Server: {min_server.id} \n Time: {finish_time} ")
+            print(f"Job {next_job.id} completed in {finish_time} seconds")
 
 
             # Continue sorting the remaining jobs
             self.job_queue.sort()
 
+            # Simulate the time of the job. Remove this line to get direct results.
+            # await asyncio.sleep(next_job.service_time)
+
             asyncio.create_task(self.run_job(min_server, next_job))
+        self.f.close()
 
     
 
@@ -113,16 +125,11 @@ class DWFA:
 
     async def run_job(self,server, job):
         finished_jobs = []
-        # start_time = time.time()
-        # print(f"Job {job.id} started at {start_time}")  
-        # finished_jobs.append((job, time.time()))
 
         await asyncio.sleep(job.service_time)
         finished_jobs.sort(key=lambda x: x[1])
 
         for job, start_time in finished_jobs:
-            # print(f"Job {job.id} finished at {start_time}")
-            # print("Server {} busy: {}".format(server.id, server.busy))
             server.finish_job()
     
     async def start_job(self, job):
@@ -145,7 +152,7 @@ class DWFA:
         min_server.expected_finish_time = finish_time
 
         # Print Job assignment
-        print("Job {} assigned to server {}".format(job.id, min_server.id))
+        print(f"Job {job.id} assigned to server {min_server.id}")
 
         # Print server busy state
         print("Server {} busy: {}".format(job.id, min_server.busy))
