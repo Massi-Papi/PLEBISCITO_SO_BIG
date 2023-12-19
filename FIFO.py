@@ -94,7 +94,7 @@ class FIFO:
             asyncio.create_task(self.run_job(server, job))
 
             # Simulate the time of the job. Remove this line to get direct results.
-            await asyncio.sleep(job.service_time)
+            # await asyncio.sleep(job.service_time)
         self.f.close()
 
     def jobs_remaining(self):
@@ -115,8 +115,6 @@ class FIFO:
 
     async def run_job(self,server, job):
 
-
-
         await asyncio.sleep(job.service_time)
     
         server.number_of_jobs -= 1
@@ -130,5 +128,5 @@ if __name__ == "__main__":
         service_time = random.randint(1, 10)
         jobs.append(Job(i, arrival_time, service_time))
 
-    fifo = FIFO(2, jobs, 5)
+    fifo = FIFO(400, jobs, 10)
     asyncio.run(fifo.run())

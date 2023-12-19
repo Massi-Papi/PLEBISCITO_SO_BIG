@@ -10,10 +10,8 @@ class Job:
         self.service_time = service_time
 
     def __lt__(self, other):
-        if self.arrival_time == other.arrival_time:
-            return self.service_time < other.service_time
         return self.service_time < other.service_time
-
+    
 class Server:
     def __init__(self, id, capacity):
         self.id = id
@@ -34,10 +32,9 @@ class Server:
         self.busy = False
         self.virtual_time = self.job.service_time
         self.expected_finish_time = 0
-        
 
-# This class implements the DWF algorithm
-class DWFA:
+
+class SJF:
     def __init__(self, num_servers, jobs, capacity):
         if num_servers < 1:
             raise ValueError("Number of servers must be greater than 0")
@@ -51,45 +48,47 @@ class DWFA:
         self.virtual_time = 0
         self.loop = asyncio.get_event_loop()
 
-        self.f = open("dwfa.txt", "w")
+        self.f = open("sjf.txt", "w")
 
         # Start time
         self.start_time = time.time()
 
 
     def add_job(self, job):
-        # Calculate finish time for job
-        finish_time = max(self.virtual_time, job.arrival_time) + job.service_time
-        heapq.heappush(self.job_queue, (finish_time, job.service_time, job))
+        finish_time = job.service_time
+        heapq.heappush(self.job_queue, (finish_time, job))
 
     async def distribute_jobs(self):
         
         while self.job_queue:
-            job_time, service_time, next_job = heapq.heappop(self.job_queue)
+            service_time, next_job = heapq.heappop(self.job_queue)
 
             # Update virtual time
-            if job_time > self.virtual_time:
-                self.virtual_time = job_time
+            self.virtual_time = max(self.virtual_time, next_job.arrival_time)
 
-            # Finds the server with the minimum number of jobs and that is not at full capacity
+            # Find the server with the minimum number of jobs and that is not at full capacity
             min_server = min((server for server in self.servers if server.number_of_jobs < server.capacity), key=lambda x: x.number_of_jobs, default=None)
 
-            # Find the server with the shortest expected finish time
-            min_server = min(self.servers, key=lambda x: x.expected_finish_time)
-            
             # If the server is busy, then the job is added to the queue
-            if min_server.busy:
-                self.virtual_time = min_server.expected_finish_time
+            if min_server and min_server.busy:
+                self.virtual_time = max(self.virtual_time, min_server.expected_finish_time)
+                
             else:
-                self.virtual_time = max(self.virtual_time, next_job.arrival_time)
-
+                # Update virtual time to the server's expected finish time
+                if min_server:
+                    self.virtual_time = min_server.expected_finish_time 
+                    min_server.start_job(next_job)
+                else:
+                    min_server = min(self.servers, key=lambda x: x.expected_finish_time)
+                    self.virtual_time = min_server.expected_finish_time
+                    min_server.start_job(next_job)
+                
+                    
             # Assign job to server
             min_server.start_job(next_job)
 
             # Save current time
-            assign_time = time.time() - self.start_time 
-
-
+            assign_time = time.time() - self.start_time
 
             print(f"Job {next_job.id} assigned to server {min_server.id} at {assign_time} seconds since the program started")
 
@@ -100,21 +99,14 @@ class DWFA:
             # Update virtual time to the server's expected finish time
             self.virtual_time = min_server.expected_finish_time
 
-            #Print job completion
-            self.f.write(f" \n Job: {next_job.id} \n Server: {min_server.id} \n Time: {finish_time} ")
+            # Print job completion
+            self.f.write(f"\n Job: {next_job.id} \n Server: {min_server.id} \n Time: {finish_time} ")
             print(f"Job {next_job.id} completed in {finish_time} seconds")
 
-
-            # Continue sorting the remaining jobs
             self.job_queue.sort()
-
-            # Simulate the time of the job. Remove this line to get direct results.
-            # await asyncio.sleep(next_job.service_time)
 
             asyncio.create_task(self.run_job(min_server, next_job))
         self.f.close()
-
-    
 
     async def run(self):
         for job in self.jobs:
@@ -122,46 +114,43 @@ class DWFA:
 
         await self.distribute_jobs()
 
-
-    async def run_job(self,server, job):
+    async def run_job(self, server, job):
         finished_jobs = []
 
         await asyncio.sleep(job.service_time)
-        finished_jobs.sort(key=lambda x: x[1])
+        finished_jobs.append(job)
 
         for job, start_time in finished_jobs:
             server.finish_job()
-    
+
     async def start_job(self, job):
-        # Finds the server with the minimum number of jobs and that is not at full capacity
-        min_server = min((server for server in self.servers if server.number_of_jobs < server.capacity), key=lambda x: x.number_of_jobs, default=None)
+                    # Finds the server with the minimum number of jobs and that is not at full capacity
+                    min_server = min((server for server in self.servers if server.number_of_jobs < server.capacity), key=lambda x: x.number_of_jobs, default=None)
 
-        # Find the server with the shortest expected finish time
-        min_server = min(self.servers, key=lambda x: x.expected_finish_time)
-        
-        # If the server is busy, then the job is added to the queue
-        if min_server.busy:
-            self.virtual_time = min_server.expected_finish_time
-        else:
-            self.virtual_time = max(self.virtual_time, job.arrival_time)
+                    # Find the server with the shortest expected finish time
+                    min_server = min(self.servers, key=lambda x: x.expected_finish_time, default=None)
+                    
+                    # If there is no minimum server available, add the job to the queue
+                    if min_server is None:
+                        self.job_queue.append((job.service_time, job))
+                        return
 
-        min_server.start_job(job)
+                    # If the server is busy, then the job is added to the queue
+                    if min_server.busy:
+                        self.virtual_time = min_server.expected_finish_time
+                    else:
+                        self.virtual_time = max(self.virtual_time, job.arrival_time)
 
-        # Calculate finish time for and assign it to the server
-        finish_time = max(self.virtual_time, job.arrival_time) + job.service_time
-        min_server.expected_finish_time = finish_time
+                    min_server.start_job(job)
 
-        # Print Job assignment
-        print(f"Job {job.id} assigned to server {min_server.id}")
+                    # Calculate finish time for and assign it to the server
+                    finish_time = max(self.virtual_time, job.arrival_time) + job.service_time
+                    min_server.expected_finish_time = finish_time
 
-        # Print server busy state
-        print("Server {} busy: {}".format(job.id, min_server.busy))
+                    # Print Job assignment
+                    print(f"Job {job.id} assigned to server {min_server.id}")
 
-        # Update virtual time
-        self.virtual_time = min_server.expected_finish_time
-
-        asyncio.create_task(self.run_job(min_server, job))
-
+                    # Print server busy state
 
 if __name__ == "__main__":
     jobs = []
@@ -170,5 +159,5 @@ if __name__ == "__main__":
         service_time = random.randint(1, 10)
         jobs.append(Job(i, arrival_time, service_time))
     
-    dwfa = DWFA(400, jobs, 10)
-    asyncio.run(dwfa.run())
+    sjf = SJF(400, jobs, 10)
+    asyncio.run(sjf.run())
